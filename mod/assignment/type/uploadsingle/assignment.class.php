@@ -92,7 +92,6 @@ class assignment_uploadsingle extends assignment_base {
         $this->view_footer();
     }
 
-
     function process_feedback() {
         if (!$feedback = data_submitted() or !confirm_sesskey()) {      // No incoming data?
             return false;
@@ -101,7 +100,26 @@ class assignment_uploadsingle extends assignment_base {
         $offset = required_param('offset', PARAM_INT);
         $mform = $this->display_submission($offset, $userid, false);
         parent::process_feedback($mform);
-        }
+    }
+
+    /**
+     * A simple function for selecting complete (real) submissions for the current assignment. This overrides
+     * assignment_base::count_real_submissions_select(). This is necessary for simple file uploads where need to check that the
+     * numfiles field is greater than zero to determine if a submission is complete.
+     *
+     * @param  string $userlist A comma seperated list of user IDs which act as a filter on the rows returned.
+     * @return int              The number of complete submissions which were discovered
+     */
+    function count_real_submissions_select($userlist){
+        global $DB;
+
+        return $DB->count_records_sql("SELECT COUNT('x')
+                                         FROM {assignment_submissions} s
+                                    LEFT JOIN {assignment} a ON a.id = s.assignment
+                                        WHERE s.assignment = ? AND
+                                              s.numfiles > 0 AND
+                                              s.userid IN ($userlist)", array($this->cm->instance));
+    }
 
     function print_responsefiles($userid, $return=false) {
         global $CFG, $USER, $OUTPUT, $PAGE;
@@ -154,7 +172,6 @@ class assignment_uploadsingle extends assignment_base {
         echo $OUTPUT->single_button(new moodle_url('/mod/assignment/type/uploadsingle/upload.php', array('contextid'=>$this->context->id, 'userid'=>$USER->id)), $str, 'get');
         echo $OUTPUT->box_end();
     }
-
 
     function upload($mform) {
         $action = required_param('action', PARAM_ALPHA);
