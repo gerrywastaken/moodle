@@ -1866,14 +1866,61 @@ class assignment_base {
         return assignment_get_all_submissions($this->assignment, $sort, $dir);
     }
 
-    /**
-     * Counts all real assignment submissions by ENROLLED students (not empty ones)
-     *
-     * @param int $groupid optional If nonzero then count is restricted to this group
-     * @return int The number of submissions
-     */
     function count_real_submissions($groupid=0) {
         return assignment_count_real_submissions($this->cm, $groupid);
+    }
+    
+    /**
+     * Counts all complete (real) assignment submissions by enrolled students
+     *
+     * @param  int $groupid (optional) If nonzero then count is restricted to this group
+     * @return int          The number of submissions
+     */
+    function count_real_submissions_new($groupid=0) {
+        global $CFG;
+
+        $context = get_context_instance(CONTEXT_MODULE, $this->cm->id);
+
+        // this is all the users with this capability set, in this context or higher
+        if ($users = get_enrolled_users($context, 'mod/assignment:view', $groupid, 'u.id')) {
+            $users = array_keys($users);
+        }
+
+        // if groupmembersonly used, remove users who are not in any group
+        if ($users and !empty($CFG->enablegroupmembersonly) and $this->cm->groupmembersonly) {
+            if ($groupingusers = groups_get_grouping_members($this->cm->groupingid, 'u.id', 'u.id')) {
+                $users = array_intersect($users, array_keys($groupingusers));
+            }
+        }
+
+        // if we have no users then we just set the returnVal to zero
+        if (empty($users)) {
+            $returnVal = 0;
+        // else we create a comma seperated list of userIds and then passthem to the database selection function.
+        }else{
+            $userlist = implode(',', $users);
+            $returnVal = $this->count_real_submissions_select($userlist);
+        }
+
+        return $returnVal;
+    }
+
+    /**
+     * A simple function for selecting complete (real) submissions for the current assignment. This function should be overloaded
+     * by assignment types if they have different requirements for what constitues a complete submission.
+     *
+     * @param  string $userlist A comma seperated list of user IDs which act as a filter on the rows returned.
+     * @return int              The number of complete submissions which were discovered
+     */
+    function count_real_submissions_select($userlist){
+        global $DB;
+
+        return $DB->count_records_sql("SELECT COUNT('x')
+                                         FROM {assignment_submissions} s
+                                    LEFT JOIN {assignment} a ON a.id = s.assignment
+                                        WHERE s.assignment = ? AND
+                                              s.timemodified > 0 AND
+                                              s.userid IN ($userlist)", array($this->cm->instance));
     }
 
     /**
@@ -3450,43 +3497,53 @@ function assignment_get_unmailed_submissions($starttime, $endtime) {
 }
 
 /**
- * Counts all real assignment submissions by ENROLLED students (not empty ones)
- *
- * There are also assignment type methods count_real_submissions() which in the default
- * implementation simply call this function.
- * @param $groupid int optional If nonzero then count is restricted to this group
- * @return int The number of submissions
+ * Counts all complete (real) assignment submissions by enrolled students for the given course modeule.
+ * 
+ * @deprecated                         Since Moodle 2.2 MDL-abc - Please do not use this function any more.
+ * @param  cm_info $cm                 The course module that we wish to perform the count on.
+ * @param  int     $groupid (optional) If nonzero then count is restricted to this group
+ * @return int                         The number of submissions
  */
 function assignment_count_real_submissions($cm, $groupid=0) {
     global $CFG, $DB;
 
-    $context = get_context_instance(CONTEXT_MODULE, $cm->id);
+    // Grab the assignment type for the given course module
+    $assignmentresult = $DB->get_record($cm->modname, array('id' => $cm->instance));
+    $assignmenttype = $assignmentresult->assignmenttype;
 
-    // this is all the users with this capability set, in this context or higher
-    if ($users = get_enrolled_users($context, 'mod/assignment:view', $groupid, 'u.id')) {
-        $users = array_keys($users);
+    // Load the appropriate assignemnt object given the type found above
+    switch($assignmenttype){
+        case 'upload':
+        case 'uploadsingle':
+            $assignmentClassName = "assignment_$assignmenttype";
+            $assignment = new $assignmentClassName();
+            break;
+        default:
+            $assignment = new assignment_base();
     }
 
-    // if groupmembersonly used, remove users who are not in any group
-    if ($users and !empty($CFG->enablegroupmembersonly) and $cm->groupmembersonly) {
-        if ($groupingusers = groups_get_grouping_members($cm->groupingid, 'u.id', 'u.id')) {
-            $users = array_intersect($users, array_keys($groupingusers));
-        }
-    }
-
-    if (empty($users)) {
-        return 0;
-    }
-
-    $userlists = implode(',', $users);
-
-    return $DB->count_records_sql("SELECT COUNT('x')
-                                     FROM {assignment_submissions}
-                                    WHERE assignment = ? AND
-                                          timemodified > 0 AND
-                                          userid IN ($userlists)", array($cm->instance));
+    // Attach the course module to the and then call the method for counting submissions
+    $assignment->cm = $cm;
+    return $assignment->count_real_submissions_new($groupid);
 }
 
+function get_module_from_cmid($cmid) {
+    global $CFG, $DB;
+    if (!$cmrec = $DB->get_record_sql("SELECT cm.*, md.name as modname
+                               FROM {course_modules} cm,
+                                    {modules} md
+                               WHERE cm.id = ? AND
+                                     md.id = cm.module", array($cmid))){
+        print_error('invalidcoursemodule');
+    } elseif (!$modrec =$DB->get_record($cmrec->modname, array('id' => $cmrec->instance))) {
+        print_error('invalidcoursemodule');
+    }
+    $modrec->instance = $modrec->id;
+    $modrec->cmid = $cmrec->id;
+    $cmrec->name = $modrec->name;
+
+    return array($modrec, $cmrec);
+}
 
 /**
  * Return all assignment submissions by ENROLLED students (even empty)
