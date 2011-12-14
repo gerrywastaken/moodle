@@ -396,6 +396,26 @@ class assignment_upload extends assignment_base {
         parent::process_feedback($mform);
     }
 
+    /**
+     * A simple function for selecting complete (real) submissions for the current assignment. This overrides
+     * assignment_base::count_real_submissions_select(). This is necessary for advanced file uploads where need to check that the
+     * data2 field is equal to "submitted" to determine if a submission is complete.
+     *
+     * @param  string $userlist A comma seperated list of user IDs which act as a filter on the rows returned.
+     * @return int              The number of complete submissions which were discovered
+     */
+    function count_real_submissions_select($userlist){
+        global $DB;
+
+        return $DB->count_records_sql("SELECT COUNT('x')
+                                         FROM {assignment_submissions} s
+                                    LEFT JOIN {assignment} a ON a.id = s.assignment
+                                        WHERE s.assignment = ? AND
+                                              s.timemodified > 0 AND
+                                              s.data2 = 'submitted' AND
+                                              s.userid IN ($userlist)", array($this->cm->instance));
+    }
+
     function print_responsefiles($userid, $return=false) {
         global $CFG, $USER, $OUTPUT, $PAGE;
 
@@ -421,7 +441,6 @@ class assignment_upload extends assignment_base {
         }
         echo $output;
     }
-
 
     /**
      * Upload files
