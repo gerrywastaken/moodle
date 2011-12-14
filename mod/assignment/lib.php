@@ -3481,10 +3481,13 @@ function assignment_count_real_submissions($cm, $groupid=0) {
     $userlists = implode(',', $users);
 
     return $DB->count_records_sql("SELECT COUNT('x')
-                                     FROM {assignment_submissions}
-                                    WHERE assignment = ? AND
-                                          timemodified > 0 AND
-                                          userid IN ($userlists)", array($cm->instance));
+                                     FROM {assignment_submissions} s
+                                LEFT JOIN {assignment} a ON a.id = s.assignment
+                                    WHERE s.assignment = ? AND
+                                          s.timemodified > 0 AND
+                                          (a.assignmenttype <> 'upload' OR s.data2 = 'submitted') AND
+                                          (a.assignmenttype <> 'uploadsingle' OR s.numfiles > 0) AND
+                                          s.userid IN ($userlists)", array($cm->instance));
 }
 
 
