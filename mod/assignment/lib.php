@@ -400,13 +400,16 @@ class assignment_base {
         } else {
             if (isloggedin()) {
                 if ($submission = $this->get_submission($USER->id)) {
-                    if ($submission->timemodified) {
-                        if ($submission->timemodified <= $this->assignment->timedue || empty($this->assignment->timedue)) {
-                            $submitted = '<span class="early">'.userdate($submission->timemodified).'</span>';
-                        } else {
-                            $submitted = '<span class="late">'.userdate($submission->timemodified).'</span>';
-                        }
-                    }
+                    //If the submission has been completed
+                     if ($this->is_complete($submission->id)) {
+                         if ($submission->timemodified) {
+                             if ($submission->timemodified <= $this->assignment->timedue || empty($this->assignment->timedue)) {
+                                 $submitted = '<span class="early">'.userdate($submission->timemodified).'</span>';
+                             } else {
+                                 $submitted = '<span class="late">'.userdate($submission->timemodified).'</span>';
+                             }
+                         }
+                     }
                 }
             }
         }
@@ -1821,6 +1824,27 @@ class assignment_base {
         $DB->insert_record("assignment_submissions", $newsubmission);
 
         return $DB->get_record('assignment_submissions', array('assignment'=>$this->assignment->id, 'userid'=>$userid));
+    }
+
+    /**
+     * Check the given submission is complete. Preliminary rows are often created in the assignment_submissions
+     * table before a submission actually takes place. This function checks to see if the given submission has actually
+     * been submitted.
+     *
+     * @global object
+     * @param int $submissionid The submissionid for the submission which we want a to check for completion
+     * @return int|bool The submission id or false if no valid submission is found
+     */
+    public function is_complete($submissionid) {
+        global $DB;
+
+        return $DB->get_field_sql("SELECT s.id
+                                     FROM {assignment_submissions} s
+                                LEFT JOIN {assignment} a ON a.id = s.assignment
+                                    WHERE s.id = ? AND
+                                          s.timemodified > 0 AND
+                                          (a.assignmenttype <> 'upload' OR s.data2 = 'submitted') AND
+                                          (a.assignmenttype <> 'uploadsingle' OR s.numfiles > 0)", array($submissionid));
     }
 
     /**
