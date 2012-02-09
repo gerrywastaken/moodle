@@ -58,7 +58,7 @@ echo $OUTPUT->heading(get_string('download', 'admin'));
 
 echo $OUTPUT->box_start();
 echo '<ul>';
-echo '<li><a href="user_bulk_download.php?format=csv">'.get_string('downloadtext').'</a></li>';
+echo '<li><a href="user_bulk_download.php?format=csv">'.get_string('downloadcsv').'</a></li>';
 echo '<li><a href="user_bulk_download.php?format=ods">'.get_string('downloadods').'</a></li>';
 echo '<li><a href="user_bulk_download.php?format=xls">'.get_string('downloadexcel').'</a></li>';
 echo '</ul>';

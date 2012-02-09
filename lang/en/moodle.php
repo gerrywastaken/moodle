@@ -455,6 +455,7 @@ $string['documentation'] = 'Moodle documentation';
 $string['down'] = 'Down';
 $string['download'] = 'Download';
 $string['downloadall'] = 'Download all';
+$string['downloadcsv'] = 'Download in CSV format (plain text)';
 $string['downloadexcel'] = 'Download in Excel format';
 $string['downloadfile'] = 'Download file';
 $string['downloadods'] = 'Download in ODS format';
