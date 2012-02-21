@@ -1866,17 +1866,27 @@ class assignment_base {
         return assignment_get_all_submissions($this->assignment, $sort, $dir);
     }
 
-    function count_real_submissions($groupid=0) {
-        return assignment_count_real_submissions($this->cm, $groupid);
-    }
-    
     /**
      * Counts all complete (real) assignment submissions by enrolled students
      *
      * @param  int $groupid (optional) If nonzero then count is restricted to this group
      * @return int          The number of submissions
      */
-    function count_real_submissions_new($groupid=0) {
+    function count_real_submissions($groupid=0) {
+        $users = $this->get_potential_users($groupid);
+
+        // if we have no users then we just set the returnVal to zero
+        if (empty($users)) {
+            $returnVal = 0;
+        // else we create a comma seperated list of userIds and then passthem to the database selection function.
+        }else{
+            $returnVal = $this->count_real_submissions_select($users);
+        }
+
+        return $returnVal;
+    }
+
+    protected function get_potential_users($groupid=0){
         global $CFG;
 
         $context = get_context_instance(CONTEXT_MODULE, $this->cm->id);
@@ -1892,35 +1902,32 @@ class assignment_base {
                 $users = array_intersect($users, array_keys($groupingusers));
             }
         }
-
-        // if we have no users then we just set the returnVal to zero
-        if (empty($users)) {
-            $returnVal = 0;
-        // else we create a comma seperated list of userIds and then passthem to the database selection function.
-        }else{
-            $userlist = implode(',', $users);
-            $returnVal = $this->count_real_submissions_select($userlist);
-        }
-
-        return $returnVal;
+        
+        return $users;
     }
-
+    
     /**
      * A simple function for selecting complete (real) submissions for the current assignment. This function should be overloaded
      * by assignment types if they have different requirements for what constitues a complete submission.
      *
-     * @param  string $userlist A comma seperated list of user IDs which act as a filter on the rows returned.
-     * @return int              The number of complete submissions which were discovered
+     * @param  array $userids An array of user IDs which act as a filter on the rows returned.
+     * @return int            The number of complete submissions which were discovered
      */
-    function count_real_submissions_select($userlist){
+    protected function count_real_submissions_select($userids){
         global $DB;
 
+        // Generate the IN portion of the SQL and it's associated params
+        list($insql, $params) = $DB->get_in_or_equal($userids);
+        
+        // Add the assignmentid given in cm onto the start of the params array for use in the SQL shown below.
+        array_unshift($params, $this->cm->instance);
+        
         return $DB->count_records_sql("SELECT COUNT('x')
                                          FROM {assignment_submissions} s
                                     LEFT JOIN {assignment} a ON a.id = s.assignment
                                         WHERE s.assignment = ? AND
                                               s.timemodified > 0 AND
-                                              s.userid IN ($userlist)", array($this->cm->instance));
+                                              s.userid $insql", $params);
     }
 
     /**
@@ -3524,25 +3531,7 @@ function assignment_count_real_submissions($cm, $groupid=0) {
 
     // Attach the course module to the and then call the method for counting submissions
     $assignment->cm = $cm;
-    return $assignment->count_real_submissions_new($groupid);
-}
-
-function get_module_from_cmid($cmid) {
-    global $CFG, $DB;
-    if (!$cmrec = $DB->get_record_sql("SELECT cm.*, md.name as modname
-                               FROM {course_modules} cm,
-                                    {modules} md
-                               WHERE cm.id = ? AND
-                                     md.id = cm.module", array($cmid))){
-        print_error('invalidcoursemodule');
-    } elseif (!$modrec =$DB->get_record($cmrec->modname, array('id' => $cmrec->instance))) {
-        print_error('invalidcoursemodule');
-    }
-    $modrec->instance = $modrec->id;
-    $modrec->cmid = $cmrec->id;
-    $cmrec->name = $modrec->name;
-
-    return array($modrec, $cmrec);
+    return $assignment->count_real_submissions($groupid);
 }
 
 /**
