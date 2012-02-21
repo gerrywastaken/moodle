@@ -107,18 +107,24 @@ class assignment_uploadsingle extends assignment_base {
      * assignment_base::count_real_submissions_select(). This is necessary for simple file uploads where need to check that the
      * numfiles field is greater than zero to determine if a submission is complete.
      *
-     * @param  string $userlist A comma seperated list of user IDs which act as a filter on the rows returned.
-     * @return int              The number of complete submissions which were discovered
+     * @param  array $userids An array of user IDs which act as a filter on the rows returned.
+     * @return int            The number of complete submissions which were discovered
      */
-    function count_real_submissions_select($userlist){
+    protected function count_real_submissions_select($userids){
         global $DB;
+
+        // Generate the IN portion of the SQL and it's associated params
+        list($insql, $params) = $DB->get_in_or_equal($userids);
+        
+        // Add the assignmentid given in cm onto the start of the params array for use in the SQL shown below.
+        array_unshift($params, $this->cm->instance);
 
         return $DB->count_records_sql("SELECT COUNT('x')
                                          FROM {assignment_submissions} s
                                     LEFT JOIN {assignment} a ON a.id = s.assignment
                                         WHERE s.assignment = ? AND
                                               s.numfiles > 0 AND
-                                              s.userid IN ($userlist)", array($this->cm->instance));
+                                              s.userid $insql", $params);
     }
 
     function print_responsefiles($userid, $return=false) {
